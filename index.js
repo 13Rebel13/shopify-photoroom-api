@@ -6,7 +6,8 @@ const axios = require('axios');
 dotenv.config();
 
 const app = express();
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '30mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 app.get('/', (req, res) => {
   res.send('API Shopify + Photoroom OK 🚀');
