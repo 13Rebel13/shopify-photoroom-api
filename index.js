@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const bodyParser = require('body-parser');
+const FormData = require('form-data');
 
 const app = express();
 app.use(bodyParser.json());
@@ -14,38 +15,39 @@ app.post('/remove-background', async (req, res) => {
     return res.status(400).json({ error: 'imageUrl manquant' });
   }
 
-  console.log('Image reçue pour traitement :', imageUrl); // log debug
-
   try {
-    const photoroomResponse = await axios({
-      method: 'post',
-      url: 'https://sdk.photoroom.com/v1/segment',
+    // 1. Télécharger l’image Shopify
+    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+
+    // 2. Préparer la requête multipart pour PhotoRoom
+    const form = new FormData();
+    form.append('image_file', Buffer.from(imageResponse.data), {
+      filename: 'image.png'
+    });
+
+    // 3. Envoyer à PhotoRoom
+    const response = await axios.post('https://sdk.photoroom.com/v1/segment', form, {
       headers: {
-        'x-api-key': PHOTOROOM_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      data: {
-        image_url: imageUrl
+        ...form.getHeaders(),
+        'x-api-key': PHOTOROOM_API_KEY
       },
       responseType: 'arraybuffer',
       validateStatus: () => true
     });
 
-    console.log('PhotoRoom status:', photoroomResponse.status); // debug
-
-    if (photoroomResponse.status !== 200) {
-      const errorText = Buffer.from(photoroomResponse.data).toString();
-      console.error('Erreur PhotoRoom (détail) :', errorText);
+    if (response.status !== 200) {
+      const errorText = Buffer.from(response.data).toString();
+      console.error('Erreur PhotoRoom (upload) :', errorText);
       return res.status(500).json({
         error: 'Erreur PhotoRoom',
         detail: errorText
       });
     }
 
-    const base64Image = Buffer.from(photoroomResponse.data, 'binary').toString('base64');
+    const base64Image = Buffer.from(response.data, 'binary').toString('base64');
     res.json({ image: `data:image/png;base64,${base64Image}` });
   } catch (error) {
-    console.error('Erreur interne :', error.message);
+    console.error('Erreur serveur :', error.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
