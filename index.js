@@ -14,21 +14,27 @@ app.post('/remove-background', async (req, res) => {
     return res.status(400).json({ error: 'imageUrl manquant' });
   }
 
+  console.log('Image reçue pour traitement :', imageUrl); // log debug
+
   try {
-    const response = await axios({
+    const photoroomResponse = await axios({
       method: 'post',
       url: 'https://sdk.photoroom.com/v1/segment',
       headers: {
         'x-api-key': PHOTOROOM_API_KEY,
         'Content-Type': 'application/json',
       },
-      data: { image_url: imageUrl },
+      data: {
+        image_url: imageUrl
+      },
       responseType: 'arraybuffer',
-      validateStatus: () => true // accepte toutes les réponses même en cas d'erreur
+      validateStatus: () => true
     });
 
-    if (response.status !== 200) {
-      const errorText = Buffer.from(response.data).toString();
+    console.log('PhotoRoom status:', photoroomResponse.status); // debug
+
+    if (photoroomResponse.status !== 200) {
+      const errorText = Buffer.from(photoroomResponse.data).toString();
       console.error('Erreur PhotoRoom (détail) :', errorText);
       return res.status(500).json({
         error: 'Erreur PhotoRoom',
@@ -36,7 +42,7 @@ app.post('/remove-background', async (req, res) => {
       });
     }
 
-    const base64Image = Buffer.from(response.data, 'binary').toString('base64');
+    const base64Image = Buffer.from(photoroomResponse.data, 'binary').toString('base64');
     res.json({ image: `data:image/png;base64,${base64Image}` });
   } catch (error) {
     console.error('Erreur interne :', error.message);
