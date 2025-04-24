@@ -2,14 +2,12 @@ const express = require('express');
 const axios = require('axios');
 const bodyParser = require('body-parser');
 const FormData = require('form-data');
-const cors = require('cors'); // 🔴 Ajout du module cors
+const cors = require('cors'); // 🔴 Ajout de cors (autorisation d'origine)
 
 const app = express();
 
-// 🔐 Autoriser uniquement l’origine Shopify (sécurisé)
-app.use(cors({
-  origin: 'https://p3ihcd-cq.myshopify.com' // ✅ remplace ici par ton vrai domaine
-}));
+// ✅ Autorise toutes les origines (utile pour tests avec Shopify + JS)
+app.use(cors());
 
 app.use(bodyParser.json({ limit: '10mb' }));
 
@@ -26,16 +24,24 @@ app.post('/remove-background', async (req, res) => {
     let imageBuffer;
     let filename = 'image.png';
 
+    // Cas 1 : image en base64
     if (imageUrl.startsWith('data:image/')) {
       const base64Data = imageUrl.split(',')[1];
       imageBuffer = Buffer.from(base64Data, 'base64');
-    } else if (imageUrl.startsWith('http')) {
+    }
+
+    // Cas 2 : image distante (URL)
+    else if (imageUrl.startsWith('http')) {
       const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
       imageBuffer = Buffer.from(imageResponse.data);
-    } else {
+    }
+
+    // Autre format → rejeté
+    else {
       return res.status(400).json({ error: 'Format imageUrl non reconnu' });
     }
 
+    // Envoi à PhotoRoom en multipart/form-data
     const form = new FormData();
     form.append('image_file', imageBuffer, { filename });
 
@@ -57,6 +63,7 @@ app.post('/remove-background', async (req, res) => {
       });
     }
 
+    // Image retournée → base64
     const base64Image = Buffer.from(response.data).toString('base64');
     res.json({ image: `data:image/png;base64,${base64Image}` });
   } catch (error) {
@@ -71,5 +78,5 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`API active sur le port ${PORT}`);
+  console.log(`✅ API PhotoRoom en ligne sur le port ${PORT}`);
 });
