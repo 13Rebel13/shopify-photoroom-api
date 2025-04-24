@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const FormData = require('form-data');
 
 const app = express();
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
 
 const PHOTOROOM_API_KEY = process.env.PHOTOROOM_API_KEY;
 
@@ -16,16 +16,27 @@ app.post('/remove-background', async (req, res) => {
   }
 
   try {
-    // 1. Télécharger l’image Shopify
-    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    let imageBuffer;
+    let filename = 'image.png';
 
-    // 2. Préparer la requête multipart pour PhotoRoom
+    // Cas 1 : image en base64 (depuis Shopify interface)
+    if (imageUrl.startsWith('data:image/')) {
+      const base64Data = imageUrl.split(',')[1];
+      imageBuffer = Buffer.from(base64Data, 'base64');
+    }
+    // Cas 2 : image distante (URL Shopify)
+    else if (imageUrl.startsWith('http')) {
+      const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      imageBuffer = Buffer.from(imageResponse.data);
+    } else {
+      return res.status(400).json({ error: 'Format imageUrl non reconnu' });
+    }
+
+    // Préparer form-data
     const form = new FormData();
-    form.append('image_file', Buffer.from(imageResponse.data), {
-      filename: 'image.png'
-    });
+    form.append('image_file', imageBuffer, { filename });
 
-    // 3. Envoyer à PhotoRoom
+    // Appel API PhotoRoom
     const response = await axios.post('https://sdk.photoroom.com/v1/segment', form, {
       headers: {
         ...form.getHeaders(),
@@ -37,14 +48,14 @@ app.post('/remove-background', async (req, res) => {
 
     if (response.status !== 200) {
       const errorText = Buffer.from(response.data).toString();
-      console.error('Erreur PhotoRoom (upload) :', errorText);
+      console.error('Erreur PhotoRoom :', errorText);
       return res.status(500).json({
         error: 'Erreur PhotoRoom',
         detail: errorText
       });
     }
 
-    const base64Image = Buffer.from(response.data, 'binary').toString('base64');
+    const base64Image = Buffer.from(response.data).toString('base64');
     res.json({ image: `data:image/png;base64,${base64Image}` });
   } catch (error) {
     console.error('Erreur serveur :', error.message);
